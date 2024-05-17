@@ -9,13 +9,20 @@ from math import pi
 def main():
     np.set_printoptions(precision=3, suppress=True)
 
+    # dh_params = np.array([[0.34, 0., -pi / 2, 0.],
+    #                       [0., 0., pi / 2, 0.],
+    #                       [0.4, 0., -pi / 2, 0.],
+    #                       [0., 0., pi / 2, 0.],
+    #                       [0.4, 0., -pi / 2, 0.],
+    #                       [0., 0., pi / 2, 0.],
+    #                       [0.126, 0., 0., 0.]])
+
+
     dh_params = np.array([[0.34, 0., -pi / 2, 0.],
                           [0., 0., pi / 2, 0.],
                           [0.4, 0., -pi / 2, 0.],
-                          [0., 0., pi / 2, 0.],
-                          [0.4, 0., -pi / 2, 0.],
-                          [0., 0., pi / 2, 0.],
-                          [0.126, 0., 0., 0.]])
+                          [0., 0., pi / 2, 0.]])
+
 
     robot = RobotSerial(dh_params)
 
