@@ -1,17 +1,89 @@
 <?xml version="1.0"?>
 <robot name="origins">
-  <link name="base_link">
+  
+  <link name="hipMid">
     <visual>
-      <origin rpy="0.0 0 0" xyz="0 0 0"/>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="package://../../STL/HipMid.stl"/>
+        <mesh filename="package://../../STL/HipMid.stl" scale="0.01"/>
       </geometry>
     </visual>
     
     <collision>
         <geometry>
-            <cylinder length="0.6" radius="0.2"/>
+            <mesh filename="package://../../STL/HipMid.stl" scale="0.01"/>
         </geometry>
     </collision>
   </link>
+
+
+  <link name="hipFront">
+    <visual>
+      <origin rpy="0 0 0" xyz="0 0 0.06"/>
+      <geometry>
+        <mesh filename="package://../../STL/HipFront.stl" scale="0.01"/>
+      </geometry>
+    </visual>
+    
+    <collision>
+        <geometry>
+            <mesh filename="package://../../STL/HipFront.stl" scale="0.01"/>
+        </geometry>
+    </collision>
+  </link>
+
+
+  <link name="hipBack">
+    <visual>
+      <origin rpy="0 0 0" xyz="0 0 -0.06"/>
+      <geometry>
+        <mesh filename="package://../../STL/HipBack.stl" scale="0.01"/>
+      </geometry>
+    </visual>
+    
+    <collision>
+        <geometry>
+            <mesh filename="package://../../STL/HipBack.stl" scale="0.01"/>
+        </geometry>
+    </collision>
+  </link>
+
+
+  <joint name="fixedHipFront" type="fixed">
+    <parent link="hipMid" />
+    <child link="hipFront" />
+    <origin xyz="0 0 0" rpy="0 0 0" />
+  </joint>
+
+
+  <joint name="fixedHipBack" type="fixed">
+    <parent link="hipMid" />
+    <child link="hipBack" />
+    <origin xyz="0 0 0" rpy="0 0 0" />
+  </joint>
+
+
+  <link name="servoHolderRight">
+    <visual>
+      <origin rpy="4.71 0 0" xyz="0.8 0.5 -0.25"/>
+      <geometry>
+        <mesh filename="package://../../STL/ServoHolderR.stl" scale="0.01"/>
+      </geometry>
+    </visual>
+    
+    <collision>
+        <geometry>
+            <mesh filename="package://../../STL/ServoHolderR.stl" scale="0.01"/>
+        </geometry>
+    </collision>
+  </link>
+
+  <joint name="revoluteRightHip" type="revolute">
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <parent link="hipFront"/>
+    <child link="servoHolderRight"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="0" upper="${2*pi}" velocity="100" effort="1"/> 
+  </joint>
+
 </robot>
