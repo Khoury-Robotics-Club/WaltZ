@@ -4,6 +4,7 @@
  */
 
 #include <Servo.h>
+#include <math.h>
 
 #define SERVO_1_R 2
 #define SERVO_2_R 3
@@ -53,3 +54,6 @@ public:
     void reset();
     void moveTo(const JointData data);
 };
+
+
+void invKinematics(float x, float y, float z, JointData &data);

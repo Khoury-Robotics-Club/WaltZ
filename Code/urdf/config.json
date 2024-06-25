@@ -1,0 +1,6 @@
+{
+    "documentId" : "4617c56cd1282ba9a6be0674",
+    "outputFormat" : "urdf",
+    "drawCollisions" : true,
+    "robotName" : "WaltZ"
+}

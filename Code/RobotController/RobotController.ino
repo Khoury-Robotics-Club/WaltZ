@@ -8,10 +8,23 @@
 
 #define IMU_FAIL_LIMIT 100
 
+JointData pose1 = {
+  90,90,90,90,90,90
+};
+
+JointData pose2 = {
+  90,45,135,90,135,135
+};
+
+JointData pose3 = {
+  90,45,135,90,135,135
+};
+
 robotMotion robot;
 gyro imu;
 
 gyroData IMUData;
+JointData jData;
 
 // For the LED Blinking thing
 int LEDFlag = 0;
@@ -21,6 +34,8 @@ unsigned long current_time, prev_time;
 
 // Keep a track of how many times the IMU failed.
 int failCount = 0;
+
+int yInput;
 
 // Set up the comunications, sensors and servos before starting the main loop of the program.
 void setup()
@@ -40,11 +55,23 @@ void setup()
   imu.reset();
   robot.reset();
 
+  yInput = 125.0;
+  invKinematics(0.0, 125, 0, jData);
   delay(500);
 }
 
 void loop()
 {
+
+  // while (Serial.available() == 0) {
+  // }
+
+  // yInput = Serial.parseInt();
+
+  // if (yInput > 70 && yInput < 300) {
+  //   invKinematics(0.0, yInput, 0, jData);
+  // }
+
   prev_time = current_time;
   current_time = micros();
   lDt = (current_time - prev_time) / 1000000.0;
@@ -68,7 +95,10 @@ void loop()
 
   // Change the color of the led over time to show the loop is still running.
   cycleLED();
-  debugPrint();
+  //debugPrint();
+
+  robot.moveTo(pose1);
+  delay(1000);  
 
   // Loop at max 100Hz
   loopRate(100);
@@ -108,38 +138,6 @@ void debugPrint(void)
   Serial.println("Temperature: ");
   Serial.print(IMUData.temperature_deg);
   Serial.println();
-}
-
-// Inverse square root of the number.
-float invSqrt(float in)
-{
-  return 1 / sqrt(in);
-}
-
-// Make coments better
-// Takes the 6 axis of freedom and converts to angles.
-JointData inverseKinematicsForLeg(float x, float y, float z)
-{
-  float alpha = 3.14 / 4, beta = 0.0, gamma = 0.0;
-  float legHeight = y;
-
-  // X axis
-
-  // Y axis
-  gamma += acos((L2 * L2 + L3 * L3 - legHeight * legHeight) / (2 * L2 * L3));
-  beta += acos((L2 * L2 + legHeight * legHeight - L3 * L3) / (2 * L2 * legHeight));
-
-  // Return the join angles.
-  JointData ret;
-  ret.rj1 = alpha * 57.3;
-  ret.rj2 = beta * 57.3;
-  ret.rj3 = gamma * 57.3;
-
-  ret.rj1 = alpha * 57.3;
-  ret.rj2 = beta * 57.3;
-  ret.rj3 = gamma * 57.3;
-
-  return ret;
 }
 
 // Cycle the LED values
