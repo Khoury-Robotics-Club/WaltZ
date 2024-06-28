@@ -16,22 +16,34 @@ class RobotWalker:
             while True:  # Run for a certain number of steps
                 obs = self.env.getObservation()
                 inputs = [
-                    obs['orientation']['roll']/2*pi,
-                    obs['orientation']['pitch']/2*pi,
-                    obs['orientation']['yaw']/2*pi,
-                    obs['orientationPlane']['roll']/2*pi,
-                    obs['orientationPlane']['pitch']/2*pi,
-                    obs['orientationPlane']['yaw']/2*pi,
+                    obs['orientation']['roll'] / (2 * pi),
+                    obs['orientation']['pitch'] / (2 * pi),
+                    obs['orientation']['yaw'] / (2 * pi),
+                    obs['orientationPlane']['roll'] / (2 * pi),
+                    obs['orientationPlane']['pitch'] / (2 * pi),
+                    obs['orientationPlane']['yaw'] / (2 * pi),
                     1 if obs['leftLegInContact'] else 0,
                     1 if obs['rightLegInContact'] else 0,
                     obs['position'][0],
                     obs['position'][1],
-                    #obs['position'][2]
+                    # obs['position'][2],  # Uncomment if needed
+                    obs['linear_velocity'][0],
+                    obs['linear_velocity'][1],
+                    obs['linear_velocity'][2],
+                    obs['angular_velocity'][0],
+                    obs['angular_velocity'][1],
+                    obs['angular_velocity'][2],
+                    obs['linear_acceleration'][0],
+                    obs['linear_acceleration'][1],
+                    obs['linear_acceleration'][2],
+                    obs['angular_acceleration'][0],
+                    obs['angular_acceleration'][1],
+                    obs['angular_acceleration'][2]
                 ]
 
                 actions = net.activate(inputs)
                 actions = np.array(actions)
-                actions = actions*pi/2
+                actions = actions * (pi / 2)
 
                 err, reward = self.env.step(actions=actions, termination=terminateForFrame, reward=scoreFunc)
                 genome.fitness += reward
@@ -39,7 +51,7 @@ class RobotWalker:
                     break
 
     @staticmethod
-    def predict_actions(observation:dict, net):
+    def predict_actions(observation: dict, net):
         inputs = [
             observation['orientation']['roll'] / (2 * pi),
             observation['orientation']['pitch'] / (2 * pi),
@@ -51,7 +63,19 @@ class RobotWalker:
             1 if observation['rightLegInContact'] else 0,
             observation['position'][0],
             observation['position'][1],
-            # observation['position'][2]  # Uncomment if needed
+            # observation['position'][2],  # Uncomment if needed
+            observation['linear_velocity'][0],
+            observation['linear_velocity'][1],
+            observation['linear_velocity'][2],
+            observation['angular_velocity'][0],
+            observation['angular_velocity'][1],
+            observation['angular_velocity'][2],
+            observation['linear_acceleration'][0],
+            observation['linear_acceleration'][1],
+            observation['linear_acceleration'][2],
+            observation['angular_acceleration'][0],
+            observation['angular_acceleration'][1],
+            observation['angular_acceleration'][2]
         ]
 
         actions = net.activate(inputs)
@@ -64,23 +88,22 @@ class RobotWalker:
             import pickle
             winner = pickle.load(f)
 
-
             # Load the NEAT configuration
             local_dir = os.path.dirname(__file__)
             config_path = os.path.join(local_dir, 'neat-config.ini')
             config = neat.config.Config(
-            neat.DefaultGenome,
-            neat.DefaultReproduction,
-            neat.DefaultSpeciesSet,
-            neat.DefaultStagnation,
-            config_path
+                neat.DefaultGenome,
+                neat.DefaultReproduction,
+                neat.DefaultSpeciesSet,
+                neat.DefaultStagnation,
+                config_path
             )
 
             # Create the neural network from the winner genome
             net = neat.nn.FeedForwardNetwork.create(winner, config)
 
         self.env.reset(True)
-    
+
         for _ in range(10000):
             obs = self.env.getObservation()
             actions = self.predict_actions(obs, net)

@@ -17,6 +17,8 @@ class ENV:
     def init(self):
         ## Set the env for the robot to interact with
         self.position_history = []
+        self.velocity_history = []
+        self.angular_velocity_history = []
         if self.GUIEnv:
             p.connect(p.GUI)
         else:
@@ -70,6 +72,26 @@ class ENV:
         _, orientation = p.getBasePositionAndOrientation(self.plane)
         rollP, pitchP, yawP = rotation.as_euler('xyz', degrees=True)
 
+        # Get the linear and angular velocity of the robot
+        linear_velocity, angular_velocity = p.getBaseVelocity(self.robot)
+        
+        # Calculate acceleration if we have previous velocities
+        if len(self.velocity_history) > 0:
+            previous_linear_velocity = self.velocity_history[-1]
+            previous_angular_velocity = self.angular_velocity_history[-1]
+            linear_acceleration = (np.array(linear_velocity) - np.array(previous_linear_velocity)) / dt
+            angular_acceleration = (np.array(angular_velocity) - np.array(previous_angular_velocity)) / dt
+        else:
+            linear_acceleration = [0, 0, 0]
+            angular_acceleration = [0, 0, 0]
+
+        self.velocity_history.append(linear_velocity)
+        self.angular_velocity_history.append(angular_velocity)
+        if len(self.velocity_history) > 20:
+            self.velocity_history.pop(0)
+        if len(self.angular_velocity_history) > 20:
+            self.angular_velocity_history.pop(0)
+
         # Check if specific link is in contact with the plane
         contact_points = p.getContactPoints(self.robot, self.plane, linkIndexA=self.leftFoot)
         leftContact = len(contact_points) > 0
@@ -81,6 +103,10 @@ class ENV:
             'position': position,
             'orientation': {'roll': roll, 'pitch': pitch, 'yaw': yaw},
             'orientationPlane': {'roll': rollP, 'pitch': pitchP, 'yaw': yawP},
+            'linear_velocity': linear_velocity,
+            'angular_velocity': angular_velocity,
+            'linear_acceleration': linear_acceleration,
+            'angular_acceleration': angular_acceleration,
             'leftLegInContact': leftContact,
             'rightLegInContact': rightContact
         }
