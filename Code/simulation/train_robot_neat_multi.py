@@ -56,11 +56,12 @@ def eval_multi(genomes, config):
     if cpuCount > popSize:
         processCount = cpuCount - 1
 
+    inputs = []
+    for _, genome in genomes:
+        genome.fitness = 0
+        inputs.append([genome, config])
+
     with multiprocessing.Pool(processCount) as pool:
-        inputs = []
-        for _, genome in genomes:
-            genome.fitness = 0
-            inputs.append([genome, config])
         pool.map(evalSingle, inputs)
 
 def run_neat(config_file):
