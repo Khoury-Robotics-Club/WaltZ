@@ -1,7 +1,7 @@
 import neat
 import os
 import numpy as np
-from env import ENV, terminateForFrame, scoreFunc
+from env import ENV, terminateForFrame, scoreFunc, scoreFuncWithJitter
 from math import pi
 
 class RobotWalker:
@@ -45,7 +45,7 @@ class RobotWalker:
                 actions = np.array(actions)
                 actions = actions * (pi / 2)
 
-                err, reward = self.env.step(actions=actions, termination=terminateForFrame, reward=scoreFunc)
+                err, reward = self.env.step(actions=actions, termination=terminateForFrame, reward=scoreFuncWithJitter)
                 genome.fitness += reward
                 if err == "Terminated":
                     break

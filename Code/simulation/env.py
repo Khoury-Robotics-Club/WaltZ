@@ -194,6 +194,71 @@ def scoreFunc(prevPosition, position):
     return score
 
 
+def scoreFuncWithJitter(prevObservation, observation):
+    # Constants for the scoring function
+    stable_orientation_reward = 1.0
+    jitter_penalty = 0.1
+    tipped_over_penalty = 2.0
+    upright_reward = 2.0
+    sitting_penalty = 1.0
+    desired_height = 0.2  # Desired height for the robot
+    height_tolerance = 0.05  # Tolerance for the desired height
+    angular_velocity_penalty = 0.5
+    angular_acceleration_penalty = 0.5
+
+    # Extract relevant data from observations
+    roll = observation["orientation"]["roll"]
+    pitch = observation["orientation"]["pitch"]
+    yaw = observation["orientation"]["yaw"]
+    position = observation["position"]
+    prev_position = prevObservation["position"]
+    linear_velocity = observation["linear_velocity"]
+    angular_velocity = observation["angular_velocity"]
+    angular_acceleration = observation["angular_acceleration"]
+
+    # Calculate orientation stability reward
+    orientation_stability = stable_orientation_reward / (1 + abs(roll) + abs(pitch))
+
+    # Penalize for jitter (large changes in orientation)
+    prev_roll = prevObservation["orientation"]["roll"]
+    prev_pitch = prevObservation["orientation"]["pitch"]
+    orientation_change = abs(roll - prev_roll) + abs(pitch - prev_pitch)
+    jitter = jitter_penalty * orientation_change
+
+    # Penalize for being tipped over
+    tipped_over = 1 if abs(pitch) > 90 or abs(roll) > 90 else 0
+    tipped_penalty = tipped_over_penalty * tipped_over
+
+    # Reward for keeping upright at a specific height
+    upright = 1 if abs(position[2] - desired_height) < height_tolerance else 0
+    upright_reward = upright_reward * upright
+
+    # Penalize if the bot is sitting down (not at the desired height)
+    sitting = 1 if position[2] < desired_height - height_tolerance else 0
+    sitting_penalty = sitting_penalty * sitting
+
+    # Penalize for large angular velocities
+    angular_velocity_magnitude = np.linalg.norm(angular_velocity)
+    angular_velocity_pen = angular_velocity_penalty * angular_velocity_magnitude
+
+    # Penalize for large angular accelerations
+    angular_acceleration_magnitude = np.linalg.norm(angular_acceleration)
+    angular_acceleration_pen = angular_acceleration_penalty * angular_acceleration_magnitude
+
+    # Calculate the total score
+    score = (
+        orientation_stability
+        - jitter
+        - tipped_penalty
+        + upright_reward
+        - sitting_penalty
+        - angular_velocity_pen
+        - angular_acceleration_pen
+    )
+
+    return score
+
+
 if __name__ == "__main__":
     import random
 
