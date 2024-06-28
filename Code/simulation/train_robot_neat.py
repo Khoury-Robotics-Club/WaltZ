@@ -129,7 +129,7 @@ def run_neat(config_file):
     p.add_reporter(stats)
 
     walker = RobotWalker()
-    winner = p.run(walker.eval_genomes, n=50)  # Run for 50 generations
+    winner = p.run(walker.eval_genomes, n=100)  # Run for 50 generations
 
     with open('winner.pkl', 'wb') as output:
         import pickle
