@@ -1,4 +1,5 @@
-import pybullet as p
+import pybullet
+import pybullet_utils.bullet_client as bc
 import pybullet_data
 from scipy.spatial.transform import Rotation as R
 import numpy as np
@@ -9,35 +10,48 @@ dt = 0.01 ## This the delta time for each step in the simulation
 
 ## Simple environment.
 class ENV:
-    def __init__(self, GUIEnv=GUIEnv):
+    def __init__(self, bulletClient, GUIEnv=True):
         self.stepsCount = 0
         self.GUIEnv = GUIEnv
+        self.bulletClient = bulletClient
+        self.p = None
         self.init()
 
     def init(self):
-        ## Set the env for the robot to interact with
         self.position_history = []
         self.velocity_history = []
         self.angular_velocity_history = []
         if self.GUIEnv:
-            p.connect(p.GUI)
+            self.p = self.bulletClient.BulletClient(connection_mode=pybullet.GUI)
         else:
-            p.connect(p.DIRECT)
-        p.resetSimulation()
-        p.setAdditionalSearchPath(pybullet_data.getDataPath())
-        p.setGravity(0, 0, -9.81)
-        p.setRealTimeSimulation(0)
+            self.p = self.bulletClient.BulletClient(connection_mode=pybullet.DIRECT)
+        self.p.resetSimulation()
+        self.p.setAdditionalSearchPath(pybullet_data.getDataPath())
+        self.p.setGravity(0, 0, -9.81)
+        self.p.setRealTimeSimulation(0)
 
-        self.plane = p.loadURDF("plane.urdf", [0, 0, 0], [0, 0, 0, 1]) ## [X,Y,Z] and quaternion
-        self.robot = p.loadURDF("../urdf/robot.urdf", [0, 0, 0.25], [0, 0, 0, 1]) # useFixedBase = True, set this for robot arm
-        self.rightFoot = 5  # Specify the link index you are interested in
-        self.leftFoot = 2  # Specify the link index you are interested in
+        self.plane = self.p.loadURDF("plane.urdf", [0, 0, 0], [0, 0, 0, 1])
+        self.robot = self.p.loadURDF("../urdf/robot.urdf", [0, 0, 0.25], [0, 0, 0, 1])
+        self.rightFoot = 5
+        self.leftFoot = 2
         self.prevObs = self.getObservation()
         self.score = 0
         self.gamma = 0.9
-        
+
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        state['p'] = None  # Exclude the bullet client from the state
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+        self.init()  # Reinitialize the bullet client
+
     def reset(self, GUIEnable=False):
-        p.disconnect()
+        if self.p is None:
+            self.init()
+            return
+        self.p.disconnect()
         self.stepsCount = 0
         self.GUIEnv = GUIEnable
         self.init()
@@ -47,7 +61,7 @@ class ENV:
         strength = np.clip(strength, 0, 1)
 
         # Get current position and orientation of the plane
-        current_position, current_orientation = p.getBasePositionAndOrientation(self.plane)
+        current_position, current_orientation = self.p.getBasePositionAndOrientation(self.plane)
 
         # Calculate new position and orientation
         new_position = [
@@ -59,21 +73,21 @@ class ENV:
         new_orientation = R.from_euler('xyz', [roll, pitch, yaw], degrees=True).as_quat()
 
         # Set new position and orientation of the plane
-        p.resetBasePositionAndOrientation(self.plane, new_position, new_orientation)
+        self.p.resetBasePositionAndOrientation(self.plane, new_position, new_orientation)
 
     def getObservation(self):
         # Get the position and orientation of the robot
-        position, orientation = p.getBasePositionAndOrientation(self.robot)
+        position, orientation = self.p.getBasePositionAndOrientation(self.robot)
         
         # Convert orientation from quaternion to roll, pitch, yaw
         rotation = R.from_quat(orientation)
         roll, pitch, yaw = rotation.as_euler('xyz', degrees=True)
         
-        _, orientation = p.getBasePositionAndOrientation(self.plane)
+        _, orientation = self.p.getBasePositionAndOrientation(self.plane)
         rollP, pitchP, yawP = rotation.as_euler('xyz', degrees=True)
 
         # Get the linear and angular velocity of the robot
-        linear_velocity, angular_velocity = p.getBaseVelocity(self.robot)
+        linear_velocity, angular_velocity = self.p.getBaseVelocity(self.robot)
         
         # Calculate acceleration if we have previous velocities
         if len(self.velocity_history) > 0:
@@ -93,10 +107,10 @@ class ENV:
             self.angular_velocity_history.pop(0)
 
         # Check if specific link is in contact with the plane
-        contact_points = p.getContactPoints(self.robot, self.plane, linkIndexA=self.leftFoot)
+        contact_points = self.p.getContactPoints(self.robot, self.plane, linkIndexA=self.leftFoot)
         leftContact = len(contact_points) > 0
 
-        contact_points = p.getContactPoints(self.robot, self.plane, linkIndexA=self.rightFoot)
+        contact_points = self.p.getContactPoints(self.robot, self.plane, linkIndexA=self.rightFoot)
         rightContact = len(contact_points) > 0
 
         observation = {
@@ -123,11 +137,11 @@ class ENV:
 
         if len(actions) == 6:
             for idx, action in enumerate(actions):
-                p.setJointMotorControlArray(self.robot, [idx], p.POSITION_CONTROL, [action])
+                self.p.setJointMotorControlArray(self.robot, [idx], pybullet.POSITION_CONTROL, [action])
 
         if GUIEnv:
-            focusPos, _ = p.getBasePositionAndOrientation(self.robot)
-            p.resetDebugVisualizerCamera(cameraDistance=0.8, cameraYaw=0, cameraPitch=-40, cameraTargetPosition=focusPos)
+            focusPos, _ = self.p.getBasePositionAndOrientation(self.robot)
+            self.p.resetDebugVisualizerCamera(cameraDistance=0.8, cameraYaw=0, cameraPitch=-40, cameraTargetPosition=focusPos)
         
         observation = self.getObservation()
         if termination(observation, self):
@@ -136,7 +150,7 @@ class ENV:
             self.score = r + self.gamma * self.score
             return "Terminated", r
 
-        p.stepSimulation()
+        self.p.stepSimulation()
         if self.GUIEnv:
             time.sleep(dt)
 
@@ -262,7 +276,7 @@ def scoreFuncWithJitter(prevObservation, observation):
 if __name__ == "__main__":
     import random
 
-    n = ENV()
+    n = ENV(bc)
     for step in range(10000):
         if step % 100 == 0:
             random_number1 = random.uniform(-5, 5)
@@ -273,6 +287,6 @@ if __name__ == "__main__":
             actions.append(random.uniform(-1, 1))
         
         actions = np.array(actions)
-        err, reward = n.step(actions=actions, termination=lambda obs: terminateForFrame(obs, n), reward=scoreFunc)
+        err, reward = n.step(actions=actions, termination=lambda obs, n: terminateForFrame(obs, n), reward=scoreFunc)
         if err == "Terminated":
-            n.reset()
+            n.reset(True)

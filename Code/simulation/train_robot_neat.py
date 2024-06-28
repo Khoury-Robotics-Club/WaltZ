@@ -2,11 +2,12 @@ import neat
 import os
 import numpy as np
 from env import ENV, terminateForFrame, scoreFunc, scoreFuncWithJitter
+import pybullet_utils.bullet_client as bc
 from math import pi
 
 class RobotWalker:
     def __init__(self):
-        self.env = ENV(False)
+        self.env = ENV(bc, False)
 
     def eval_genomes(self, genomes, config):
         for genome_id, genome in genomes:
