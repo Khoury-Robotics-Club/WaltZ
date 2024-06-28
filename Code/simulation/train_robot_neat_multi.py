@@ -58,7 +58,7 @@ def eval_multi(genomes, config):
 
     inputs = []
     for _, genome in genomes:
-        genome.fitness = 0
+        #genome.fitness = 0
         inputs.append([genome, config])
 
     with multiprocessing.Pool(processCount) as pool:
