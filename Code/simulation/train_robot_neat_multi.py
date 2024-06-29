@@ -4,15 +4,15 @@ import numpy as np
 from env import ENV, terminateForFrame, scoreFunc, scoreFuncWithJitter
 from math import pi
 import pybullet_utils.bullet_client as bc
+import time
+import multiprocessing as mp
 
-import multiprocessing 
-
-def evalSingle(input):
-    genome, config = input
+def evalSingle(genome, config, c_conn=None):
     env = ENV(bc, False)
     net = neat.nn.FeedForwardNetwork.create(genome, config)
     env.reset(False)
     genome.fitness = 0
+    startTime = time.time()
     while True:
         obs = env.getObservation()
         inputs = [
@@ -48,21 +48,35 @@ def evalSingle(input):
         genome.fitness += reward
         if err == "Terminated":
             break
+        if time.time() - startTime > 100.0:
+            break
+    
+    if c_conn == None:
+        return genome.fitness
+    else:
+        c_conn.send(genome.fitness)
 
 def eval_multi(genomes, config):
-    cpuCount = multiprocessing.cpu_count()
+    cpuCount = mp.cpu_count()
     popSize = config.pop_size
     processCount = popSize
     if cpuCount > popSize:
         processCount = cpuCount - 1
 
-    with multiprocessing.Pool(processCount) as pool:
-        inputs = []
-        for _, genome in genomes:
-            genome.fitness = 0
-            inputs.append([genome, config])
-        pool.map(evalSingle, inputs)
+    pipes = dict()
+    processes = dict()
+    for idx, genome in genomes:
+        p_conn, c_conn = mp.Pipe()
+        pipes[idx] = ([p_conn, c_conn])
+        process = mp.Process(target=evalSingle, args=(genome, config, c_conn))
+        process.start()
+        processes[idx] = process
 
+    for idx, genome in genomes:
+        p_conn = pipes[idx][0]
+        genome.fitness = p_conn.recv()
+        processes[idx].join()
+        
 def run_neat(config_file):
     config = neat.config.Config(
         neat.DefaultGenome,
