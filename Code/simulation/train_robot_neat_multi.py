@@ -1,11 +1,12 @@
 import neat
 import os
 import numpy as np
-from env import ENV, terminateForFrame, scoreFunc, scoreFuncWithJitter
+from env import ENV, terminateForFrame, scoreFuncWithJitter
 from math import pi
 import pybullet_utils.bullet_client as bc
 import time
 import multiprocessing as mp
+import pickle
 
 def evalSingle(genome, config, c_conn=None):
     env = ENV(bc, False)
@@ -41,33 +42,27 @@ def evalSingle(genome, config, c_conn=None):
         ]
 
         actions = net.activate(inputs)
-        actions = np.array(actions)
-        actions = actions * (pi / 2)
+        actions = np.array(actions) * (pi / 2)
 
         err, reward = env.step(actions=actions, termination=terminateForFrame, reward=scoreFuncWithJitter)
         genome.fitness += reward
-        if err == "Terminated":
+        if err == "Terminated" or time.time() - startTime > 100.0:
             break
-        if time.time() - startTime > 100.0:
-            break
-    
-    if c_conn == None:
-        return genome.fitness
-    else:
+
+    if c_conn is not None:
         c_conn.send(genome.fitness)
+        c_conn.close()
 
 def eval_multi(genomes, config):
     cpuCount = mp.cpu_count()
     popSize = config.pop_size
-    processCount = popSize
-    if cpuCount > popSize:
-        processCount = cpuCount - 1
+    processCount = min(cpuCount, popSize)
 
-    pipes = dict()
-    processes = dict()
+    pipes = {}
+    processes = {}
     for idx, genome in genomes:
         p_conn, c_conn = mp.Pipe()
-        pipes[idx] = ([p_conn, c_conn])
+        pipes[idx] = (p_conn, c_conn)
         process = mp.Process(target=evalSingle, args=(genome, config, c_conn))
         process.start()
         processes[idx] = process
@@ -75,8 +70,9 @@ def eval_multi(genomes, config):
     for idx, genome in genomes:
         p_conn = pipes[idx][0]
         genome.fitness = p_conn.recv()
+        p_conn.close()
         processes[idx].join()
-        
+
 def run_neat(config_file):
     config = neat.config.Config(
         neat.DefaultGenome,
@@ -87,15 +83,13 @@ def run_neat(config_file):
     )
 
     p = neat.Population(config)
-
     p.add_reporter(neat.StdOutReporter(True))
     stats = neat.StatisticsReporter()
     p.add_reporter(stats)
 
-    winner = p.run(eval_multi, n=100)  # Run for 50 generations
+    winner = p.run(eval_multi, n=100)
 
     with open('winner.pkl', 'wb') as output:
-        import pickle
         pickle.dump(winner, output, 1)
 
 if __name__ == "__main__":
