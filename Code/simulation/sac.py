@@ -10,11 +10,16 @@ import torch.nn as nn
 import torch.optim as optim
 from collections import deque
 import copy
-
-from env import *
+import os  # Import os to handle directory creation
 
 # Set device
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+GUIEnv = False  # Set to False on cloud environments
+dt = 0.01  # Delta time for each simulation step
+
+# Include your ENV class and supporting functions here
+# For brevity, I'll assume the ENV class and other necessary functions are defined above this point.
 
 # Define the reward function
 def standing_still_reward(prevObservation, observation):
@@ -143,7 +148,7 @@ class ReplayBuffer:
     def __len__(self):
         return len(self.buffer)
 
-# Define the SAC agent
+# Define the SAC agent with the corrected train method
 class SACAgent:
     def __init__(self, state_dim, action_dim, max_action):
         self.actor = Actor(state_dim, action_dim, max_action).to(device)
@@ -215,6 +220,10 @@ class SACAgent:
         for param, target_param in zip(self.critic.parameters(), self.critic_target.parameters()):
             target_param.data.copy_(self.tau * param.data + (1 - self.tau) * target_param.data)
 
+        # Return the losses
+        return actor_loss.item(), critic_loss.item(), alpha_loss.item()
+
+# Main training loop
 if __name__ == "__main__":
     # Create 'results' directory if it doesn't exist
     if not os.path.exists('results'):
@@ -273,17 +282,18 @@ if __name__ == "__main__":
                 else:
                     action = agent.select_action(state)
 
+                prev_observation = observation  # For reward calculation
                 err, reward = env.step(
                     actions=action,
                     termination=lambda obs, env: terminateForFrame(obs, env),
-                    reward=standing_still_reward
+                    reward=lambda prev_obs, obs: standing_still_reward(prev_obs, obs)
                 )
-                next_observation = env.getObservation()
+                observation = env.getObservation()
                 next_state = np.concatenate([
-                    next_observation['position'],
-                    [next_observation['orientation']['roll'], next_observation['orientation']['pitch'], next_observation['orientation']['yaw']],
-                    next_observation['linear_velocity'],
-                    next_observation['angular_velocity']
+                    observation['position'],
+                    [observation['orientation']['roll'], observation['orientation']['pitch'], observation['orientation']['yaw']],
+                    observation['linear_velocity'],
+                    observation['angular_velocity']
                 ])
                 done = err == "Terminated"
                 replay_buffer.push(state, action, reward, next_state, float(done))
@@ -304,7 +314,7 @@ if __name__ == "__main__":
                     break
 
             returns.append(episode_reward)
-            print(f"Run: {run+1}/{num_runs}, Episode: {episode+1}/{num_episodes}, Reward: {episode_reward}, Steps: {step+1}")
+            print(f"Run: {run+1}/{num_runs}, Episode: {episode+1}/{num_episodes}, Reward: {episode_reward:.2f}, Steps: {step+1}")
 
         # Save returns and losses to numpy arrays
         np.save(f'results/returns_run_{seed}.npy', np.array(returns))

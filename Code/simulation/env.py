@@ -6,7 +6,7 @@ import numpy as np
 import time
 import random
 
-GUIEnv = True  # Set to False on cloud environments
+GUIEnv = False  # Set to False on cloud environments
 dt = 0.01  # Delta time for each simulation step
 
 # Simple environment class
