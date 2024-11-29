@@ -12,8 +12,12 @@ from collections import deque
 import copy
 import os  # Import os to handle directory creation
 
+
+from env import ENV, terminateForFrame
+
 # Set device
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print("Device:", device)
 
 GUIEnv = False  # Set to False on cloud environments
 dt = 0.01  # Delta time for each simulation step
@@ -69,10 +73,11 @@ class Actor(nn.Module):
         super(Actor, self).__init__()
         self.max_action = max_action
 
-        self.l1 = nn.Linear(state_dim, 256)
-        self.l2 = nn.Linear(256, 256)
-        self.mean = nn.Linear(256, action_dim)
-        self.log_std = nn.Linear(256, action_dim)
+        hidden_layer_size = 512
+        self.l1 = nn.Linear(state_dim, hidden_layer_size)
+        self.l2 = nn.Linear(hidden_layer_size, hidden_layer_size)
+        self.mean = nn.Linear(hidden_layer_size, action_dim)
+        self.log_std = nn.Linear(hidden_layer_size, action_dim)
         self.min_log_std = -20
         self.max_log_std = 2
 
@@ -99,13 +104,14 @@ class Critic(nn.Module):
     def __init__(self, state_dim, action_dim):
         super(Critic, self).__init__()
         # Q1 architecture
-        self.l1 = nn.Linear(state_dim + action_dim, 256)
-        self.l2 = nn.Linear(256, 256)
-        self.l3 = nn.Linear(256, 1)
+        hidden_layer_size = 512
+        self.l1 = nn.Linear(state_dim + action_dim, hidden_layer_size)
+        self.l2 = nn.Linear(hidden_layer_size, hidden_layer_size)
+        self.l3 = nn.Linear(hidden_layer_size, 1)
         # Q2 architecture
-        self.l4 = nn.Linear(state_dim + action_dim, 256)
-        self.l5 = nn.Linear(256, 256)
-        self.l6 = nn.Linear(256, 1)
+        self.l4 = nn.Linear(state_dim + action_dim, hidden_layer_size)
+        self.l5 = nn.Linear(hidden_layer_size, hidden_layer_size)
+        self.l6 = nn.Linear(hidden_layer_size, 1)
 
     def forward(self, state, action):
         xu = torch.cat([state, action], 1)
@@ -152,18 +158,18 @@ class ReplayBuffer:
 class SACAgent:
     def __init__(self, state_dim, action_dim, max_action):
         self.actor = Actor(state_dim, action_dim, max_action).to(device)
-        self.actor_optimizer = optim.Adam(self.actor.parameters(), lr=3e-4)
+        self.actor_optimizer = optim.Adam(self.actor.parameters(), lr=1e-4)
 
         self.critic = Critic(state_dim, action_dim).to(device)
-        self.critic_optimizer = optim.Adam(self.critic.parameters(), lr=3e-4)
+        self.critic_optimizer = optim.Adam(self.critic.parameters(), lr=1e-4)
         self.critic_target = copy.deepcopy(self.critic)
 
         self.log_alpha = torch.zeros(1, requires_grad=True, device=device)
-        self.alpha_optimizer = optim.Adam([self.log_alpha], lr=3e-4)
-        self.target_entropy = -action_dim  # Recommended default value
+        self.alpha_optimizer = optim.Adam([self.log_alpha], lr=1e-4)
+        self.target_entropy = -action_dim/2  # Recommended default value
 
         self.max_action = max_action
-        self.discount = 0.99
+        self.discount = 0.999
         self.tau = 0.005
 
     def select_action(self, state, evaluate=False):
@@ -176,7 +182,7 @@ class SACAgent:
             action, _ = self.actor.sample(state)
             return action.detach().cpu().numpy()[0]
 
-    def train(self, replay_buffer, batch_size=256):
+    def train(self, replay_buffer, batch_size=512):
         # Sample replay buffer
         state, action, reward, next_state, done = replay_buffer.sample(batch_size)
 
@@ -229,10 +235,10 @@ if __name__ == "__main__":
     if not os.path.exists('results'):
         os.makedirs('results')
 
-    num_runs = 10
-    num_episodes = 1000
-    max_steps = 1000
-    batch_size = 256
+    num_runs = 5
+    num_episodes = 10000
+    max_steps = 10000
+    batch_size = 512
     start_steps = 10000  # Number of steps to collect data before training
     updates_per_step = 1
     action_dim = 6  # Number of actions

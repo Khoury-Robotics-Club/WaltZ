@@ -3,7 +3,7 @@ import pybullet_utils.bullet_client as bc
 import pybullet_data
 from scipy.spatial.transform import Rotation as R
 import numpy as np
-import time
+import time, os
 import random
 
 GUIEnv = False  # Set to False on cloud environments
@@ -11,7 +11,7 @@ dt = 0.01  # Delta time for each simulation step
 
 # Simple environment class
 class ENV:
-    def __init__(self, bulletClient, GUIEnv=True):
+    def __init__(self, bulletClient, GUIEnv=True, urdf_path="../urdf/robot.urdf"):
         self.stepsCount = 0
         self.GUIEnv = GUIEnv
         self.bulletClient = bulletClient
@@ -19,6 +19,7 @@ class ENV:
         self.plane_roll = 0.0  # Initialize plane roll angle
         self.plane_pitch = 0.0  # Initialize plane pitch angle
         self.plane_yaw = 0.0  # Initialize plane yaw angle
+        self.urdf_path = urdf_path
         self.init()
 
     def init(self):
@@ -35,7 +36,7 @@ class ENV:
         self.p.setRealTimeSimulation(0)
 
         self.plane = self.p.loadURDF("plane.urdf", [0, 0, 0], [0, 0, 0, 1])
-        self.robot = self.p.loadURDF("../urdf/robot.urdf", [0, 0, 0.25], [0, 0, 0, 1])
+        self.robot = self.p.loadURDF(self.urdf_path, [0, 0, 0.25], [0, 0, 0, 1])
         self.rightFoot = 5
         self.leftFoot = 2
         self.prevObs = self.getObservation()
@@ -163,6 +164,8 @@ class ENV:
             time.sleep(dt)
 
         r = reward(self.prevObs, observation)
+        if self.stepsCount > 1000:
+            r += 5000 ## Reward for geting through a 1000 steps 
         self.prevObs = observation
         self.score = r + self.gamma * self.score
         return "", r
@@ -286,8 +289,9 @@ def standing_still_reward(prevObservation, observation):
     stability_bonus_weight = 0.1
     jerk_penalty_weight = 0.05  # Adjusted to balance the impact
 
+
     # Extract orientations
-    roll = observation["orientation"]["roll"]
+    roll = observation["orientation"]["roll"] - 90
     pitch = observation["orientation"]["pitch"]
     
     # Check if robot is upright
@@ -323,12 +327,17 @@ def standing_still_reward(prevObservation, observation):
 ## Test for a few 1000setps with random actions.
 if __name__ == "__main__":
     n = ENV(bc)
-    for step in range(1000): 
-        actions = np.random.uniform(-1, 1, size=6)
+    for step in range(100000): 
+        #actions = np.random.uniform(-1, 1, size=6)
+        actions = np.array([0, 0, 0, 0, 0, 0])
         err, reward = n.step(
             actions=actions,
             termination=lambda obs, env: terminateForFrame(obs, env),
             reward=standing_still_reward
         )
+        obs = n.getObservation()
+        print(obs["orientation"])
         if err == "Terminated":
-            n.reset(True)
+            pass
+            #print("End")
+            #n.reset(True)
