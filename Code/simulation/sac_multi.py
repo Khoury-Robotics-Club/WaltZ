@@ -325,6 +325,9 @@ def worker(run, return_dict):
     }
 
 if __name__ == "__main__":
+    ## Do this trick for CUDA as it cannot be re initializd in forked sub processes.
+    mp.set_start_method('spawn', force=True)
+    
     # Create 'results' directory if it doesn't exist
     if not os.path.exists('results'):
         os.makedirs('results')
