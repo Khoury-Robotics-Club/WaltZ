@@ -297,7 +297,7 @@ def standing_still_reward(prevObservation, observation):
 if __name__ == "__main__":
     n = ENV(bc, GUIEnv=True)  # Enable GUI for testing
     for step in range(100000):
-        actions = np.random.uniform(-1, 1, size=6)
+        actions = np.random.uniform(0, 1, size=6)
         err, reward = n.step(
             actions=actions,
             termination=lambda obs, env: terminateForFrame(obs, env),
