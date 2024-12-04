@@ -9,6 +9,39 @@ import random
 GUIEnv = False  # Set to False on cloud environments
 dt = 0.01  # Delta time for each simulation step
 
+
+def euler_to_quaternion(roll_deg, pitch_deg, yaw_deg):
+    """
+    Converts roll, pitch, yaw angles in degrees to a quaternion for PyBullet.
+    The rotations are applied with respect to the global coordinate system (extrinsic rotations).
+
+    Parameters:
+    - roll_deg: Roll angle in degrees (rotation around global X-axis)
+    - pitch_deg: Pitch angle in degrees (rotation around global Y-axis)
+    - yaw_deg: Yaw angle in degrees (rotation around global Z-axis)
+
+    Returns:
+    - quaternion: A list [x, y, z, w] representing the quaternion
+    """
+    import numpy as np
+    from scipy.spatial.transform import Rotation as R
+
+    # Convert degrees to radians
+    roll = np.deg2rad(roll_deg)
+    pitch = np.deg2rad(pitch_deg)
+    yaw = np.deg2rad(yaw_deg)
+
+    # Create a rotation object with extrinsic rotations about 'XYZ' axes
+    # Uppercase 'XYZ' indicates extrinsic rotations (global coordinate system)
+    rotation = R.from_euler('XYZ', [roll, pitch, yaw], degrees=False)
+
+    # Get the quaternion (x, y, z, w)
+    quaternion = rotation.as_quat()
+
+    # Return the quaternion as a list [x, y, z, w]
+    return quaternion.tolist()
+
+
 # Simple environment class
 class ENV:
     def __init__(self, bulletClient, GUIEnv=True, urdf_path="../urdf/robot.urdf"):
@@ -28,6 +61,7 @@ class ENV:
         self.angular_velocity_history = []
         if self.GUIEnv:
             self.p = self.bulletClient.BulletClient(connection_mode=pybullet.GUI)
+            self.p.configureDebugVisualizer(self.p.COV_ENABLE_GUI, 0)  # Disable default GUI to enable user interaction
         else:
             self.p = self.bulletClient.BulletClient(connection_mode=pybullet.DIRECT)
         self.p.resetSimulation()
@@ -36,7 +70,7 @@ class ENV:
         self.p.setRealTimeSimulation(0)
 
         self.plane = self.p.loadURDF("plane.urdf", [0, 0, 0], [0, 0, 0, 1])
-        self.robot = self.p.loadURDF(self.urdf_path, [0, 0, 0.25], [0, 0, 0, 1])
+        self.robot = self.p.loadURDF(self.urdf_path, [0, 0, 0.5], euler_to_quaternion(90, 0, 0))  # Raise initial height
         self.rightFoot = 5
         self.leftFoot = 2
         self.prevObs = self.getObservation()
@@ -69,11 +103,11 @@ class ENV:
     def getObservation(self):
         # Get the position and orientation of the robot
         position, orientation = self.p.getBasePositionAndOrientation(self.robot)
-        
+
         # Convert orientation from quaternion to roll, pitch, yaw
         rotation = R.from_quat(orientation)
         roll, pitch, yaw = rotation.as_euler('xyz', degrees=True)
-        
+
         # Get plane orientation
         _, plane_orientation = self.p.getBasePositionAndOrientation(self.plane)
         plane_rotation = R.from_quat(plane_orientation)
@@ -81,7 +115,7 @@ class ENV:
 
         # Get the linear and angular velocity of the robot
         linear_velocity, angular_velocity = self.p.getBaseVelocity(self.robot)
-        
+
         # Calculate acceleration if we have previous velocities
         if len(self.velocity_history) > 0:
             previous_linear_velocity = self.velocity_history[-1]
@@ -121,7 +155,7 @@ class ENV:
         self.position_history.append(position)
         if len(self.position_history) > 20:
             self.position_history.pop(0)
-        
+
         return observation
 
     # Actions = [lABS, lHip, lKnee, rABS, rHip, rKnee]
@@ -130,12 +164,12 @@ class ENV:
 
         if len(actions) == 6:
             for idx, action in enumerate(actions):
-                self.p.setJointMotorControlArray(self.robot, [idx], pybullet.POSITION_CONTROL, [action])
+                self.p.setJointMotorControl2(bodyIndex=self.robot, jointIndex=idx, controlMode=pybullet.POSITION_CONTROL, targetPosition=action)
 
         if self.GUIEnv:
             focusPos, _ = self.p.getBasePositionAndOrientation(self.robot)
-            self.p.resetDebugVisualizerCamera(cameraDistance=0.8, cameraYaw=0, cameraPitch=-40, cameraTargetPosition=focusPos)
-        
+            self.p.resetDebugVisualizerCamera(cameraDistance=1.5, cameraYaw=30, cameraPitch=-30, cameraTargetPosition=focusPos)
+
         # Adjust plane orientation
         max_angle = 10.0  # degrees
         max_step = 0.1    # degrees
@@ -165,20 +199,22 @@ class ENV:
 
         r = reward(self.prevObs, observation)
         if self.stepsCount > 1000:
-            r += 5000 ## Reward for geting through a 1000 steps 
+            r += 5000  # Reward for getting through 1000 steps
         self.prevObs = observation
         self.score = r + self.gamma * self.score
         return "", r
-    
+
     def getCurScore(self) -> float:
         return self.score
+
 
 def is_upside_down(observation):
     roll = observation["orientation"]["roll"]
     pitch = observation["orientation"]["pitch"]
-    if abs(pitch) > 90 or abs(roll) > 90:
+    if abs(pitch) > 90 or abs(roll-90) > 90:
         return True
     return False
+
 
 def has_moved_significantly(position_history, threshold=0.001):
     if len(position_history) < 20:
@@ -187,149 +223,77 @@ def has_moved_significantly(position_history, threshold=0.001):
     distances = np.linalg.norm(deltas, axis=1)
     return np.any(distances > threshold)
 
+
 def terminateForFrame(observation, env):
-    if env.stepsCount > 1000000:
+    if env.stepsCount > 2500:
+        print("Count exceded")
         return True
     if is_upside_down(observation):
+        print("Upside down")
         return True
-    if not has_moved_significantly(env.position_history):
-        return True
+    # if not has_moved_significantly(env.position_history):
+    #     return True
     return False
+
 
 def rewardForFrame(observation):
     return observation["position"][2] / 100
 
-def scoreFunc(prevPosition, position):
-    # Calculate the change in position
-    prevPosition = prevPosition["position"]
-    position = position["position"]
-
-    delta_x = position[0] - prevPosition[0]
-    delta_y = position[1] - prevPosition[1]
-    delta_z = position[2] - prevPosition[2]
-
-    # Reward movement in the Y direction
-    reward = delta_y
-
-    # Penalize movement in the X or Z directions
-    penalty = abs(delta_x) + abs(delta_z)
-
-    # Calculate the final score
-    score = reward - penalty
-
-    return score
-
-def scoreFuncWithJitter(prevObservation, observation):
-    # Constants for the scoring function
-    stable_orientation_reward = 1.0
-    jitter_penalty = 0.1
-    tipped_over_penalty = 2.0
-    upright_reward = 2.0
-    sitting_penalty = 1.0
-    desired_height = 0.2  # Desired height for the robot
-    height_tolerance = 0.05  # Tolerance for the desired height
-    angular_velocity_penalty = 0.5
-    angular_acceleration_penalty = 0.5
-
-    # Extract relevant data from observations
-    roll = observation["orientation"]["roll"]
-    pitch = observation["orientation"]["pitch"]
-    position = observation["position"]
-    prev_roll = prevObservation["orientation"]["roll"]
-    prev_pitch = prevObservation["orientation"]["pitch"]
-    angular_velocity = observation["angular_velocity"]
-    angular_acceleration = observation["angular_acceleration"]
-
-    # Calculate orientation stability reward
-    orientation_stability = stable_orientation_reward / (1 + abs(roll) + abs(pitch))
-
-    # Penalize for jitter (large changes in orientation)
-    orientation_change = abs(roll - prev_roll) + abs(pitch - prev_pitch)
-    jitter = jitter_penalty * orientation_change
-
-    # Penalize for being tipped over
-    tipped_over = 1 if abs(pitch) > 90 or abs(roll) > 90 else 0
-    tipped_penalty = tipped_over_penalty * tipped_over
-
-    # Reward for keeping upright at a specific height
-    upright = 1 if abs(position[2] - desired_height) < height_tolerance else 0
-    upright_reward = upright_reward * upright
-
-    # Penalize if the robot is sitting down (not at the desired height)
-    sitting = 1 if position[2] < desired_height - height_tolerance else 0
-    sitting_penalty = sitting_penalty * sitting
-
-    # Penalize for large angular velocities
-    angular_velocity_magnitude = np.linalg.norm(angular_velocity)
-    angular_velocity_pen = angular_velocity_penalty * angular_velocity_magnitude
-
-    # Penalize for large angular accelerations
-    angular_acceleration_magnitude = np.linalg.norm(angular_acceleration)
-    angular_acceleration_pen = angular_acceleration_penalty * angular_acceleration_magnitude
-
-    # Calculate the total score
-    score = (
-        orientation_stability
-        - jitter
-        - tipped_penalty
-        + upright_reward
-        - sitting_penalty
-        - angular_velocity_pen
-        - angular_acceleration_pen
-    )
-
-    return score
-
 
 def standing_still_reward(prevObservation, observation):
-    # Constants
-    max_upright_angle = 10  # degrees
+    desired_roll = 90.0
+    desired_pitch = 0.0
+    max_angle_error = 20.0  # Maximum angle error for scaling the reward
+
+    # Weights for different components of the reward
     upright_bonus_weight = 1.0
     tipping_penalty_weight = 5.0
     stability_bonus_weight = 0.1
     jerk_penalty_weight = 0.05  # Adjusted to balance the impact
 
-
-    # Extract orientations
-    roll = observation["orientation"]["roll"] - 90
+    # Extract current orientations
+    roll = observation["orientation"]["roll"]
     pitch = observation["orientation"]["pitch"]
-    
-    # Check if robot is upright
-    upright = (abs(roll) < max_upright_angle) and (abs(pitch) < max_upright_angle)
-    
-    # Calculate upright_bonus
-    upright_bonus = upright_bonus_weight * (1 - (abs(roll) + abs(pitch)) / (2 * max_upright_angle))
-    upright_bonus = max(upright_bonus, 0)  # Ensure non-negative
-    
-    # Penalize tipping over
+
+    # Compute absolute errors
+    roll_error = abs(roll - desired_roll)
+    pitch_error = abs(pitch - desired_pitch)
+
+    # Check if robot is within acceptable error margins
+    within_tolerance = (roll_error < max_angle_error) and (pitch_error < max_angle_error)
+
+    # Calculate upright_bonus based on how close the robot is to the desired orientation
+    upright_bonus = upright_bonus_weight * (1 - (roll_error + pitch_error) / (2 * max_angle_error))
+    upright_bonus = max(upright_bonus, 0)  # Ensure the bonus is non-negative
+
+    # Penalize tipping over (if the error is too large)
     tipping_penalty = 0
-    if abs(roll) >= 90 or abs(pitch) >= 90:
+    if roll_error >= 90 or pitch_error >= 90:
         tipping_penalty = tipping_penalty_weight
-    
-    # Stability bonus (accumulates over time if upright)
-    if upright:
+
+    # Stability bonus to encourage staying in the desired orientation over time
+    if within_tolerance:
         stability_bonus = stability_bonus_weight
     else:
         stability_bonus = 0
 
-    # Calculate jerk penalty based on linear and angular accelerations
+    # Calculate jerk penalty based on changes in acceleration
     linear_acceleration = observation["linear_acceleration"]
     angular_acceleration = observation["angular_acceleration"]
     jerk = np.linalg.norm(linear_acceleration) + np.linalg.norm(angular_acceleration)
     jerk_penalty = jerk_penalty_weight * jerk
 
-    # Total reward
+    # Total reward calculation
     reward = upright_bonus + stability_bonus - tipping_penalty - jerk_penalty
 
     return reward
 
 
-## Test for a few 1000setps with random actions.
+# Test for a few 1000 steps with random actions.
 if __name__ == "__main__":
-    n = ENV(bc)
-    for step in range(100000): 
-        #actions = np.random.uniform(-1, 1, size=6)
-        actions = np.array([0, 0, 0, 0, 0, 0])
+    n = ENV(bc, GUIEnv=True)  # Enable GUI for testing
+    for step in range(100000):
+        actions = np.random.uniform(-1, 1, size=6)
         err, reward = n.step(
             actions=actions,
             termination=lambda obs, env: terminateForFrame(obs, env),
@@ -338,6 +302,5 @@ if __name__ == "__main__":
         obs = n.getObservation()
         print(obs["orientation"])
         if err == "Terminated":
-            pass
-            #print("End")
-            #n.reset(True)
+            print("End of Episode")
+            n.reset(True)  # Reset the environment with GUI enabled
