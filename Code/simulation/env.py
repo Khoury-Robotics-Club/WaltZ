@@ -162,6 +162,10 @@ class ENV:
     def step(self, actions: np.ndarray, termination=lambda x, obj: False, reward=lambda x, y: 0):
         self.stepsCount += 1
 
+        min_value = -0.785
+        max_value = 0.785
+        actions = actions * (max_value - min_value) + min_value
+    
         if len(actions) == 6:
             for idx, action in enumerate(actions):
                 self.p.setJointMotorControl2(bodyIndex=self.robot, jointIndex=idx, controlMode=pybullet.POSITION_CONTROL, targetPosition=action)
