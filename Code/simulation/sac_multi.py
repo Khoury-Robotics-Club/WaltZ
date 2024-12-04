@@ -244,7 +244,7 @@ def worker(run, return_dict):
     num_episodes = 1000
     max_steps = 2000
     batch_size = 512
-    start_steps = 1000  # Number of steps to collect data before training
+    start_steps = 10 
     updates_per_step = 1
 
     # Record returns and losses
