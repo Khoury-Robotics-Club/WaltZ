@@ -282,8 +282,8 @@ def standing_still_reward(prevObservation, observation):
         stability_bonus = 0
 
     # Calculate jerk penalty based on changes in acceleration
-    linear_acceleration = observation["linear_acceleration"]
-    angular_acceleration = observation["angular_acceleration"]
+    linear_acceleration = observation.get("linear_acceleration", 0)
+    angular_acceleration = observation.get("angular_acceleration", 0)
     jerk = np.linalg.norm(linear_acceleration) + np.linalg.norm(angular_acceleration)
     jerk_penalty = jerk_penalty_weight * jerk
 
